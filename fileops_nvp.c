@@ -1045,7 +1045,7 @@ RETT_PREAD _nvp_do_pread(INTF_PREAD)
 	void* result =
 	#endif
 //		FSYNC_MEMCPY(buf, nvf->node->data+offset, len_to_read);
-		intel_memcpy(buf, nvf->node->data+offset, len_to_read);
+		memcpy1(buf, nvf->node->data+offset, len_to_read);
 
 
 #if TIME_READ_MEMCPY
