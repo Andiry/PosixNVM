@@ -292,11 +292,11 @@ static void * mmx2_memcpy(void * __restrict__ to, const void * __restrict__ from
 //////////////////////////
 
 // modifications to support different FSYNC policies
-//#define MEMCPY memcpy
+#define MEMCPY memcpy
 //define MEMCPY intel_memcpy
 //#define MEMCPY (void*)copy_from_user_inatomic_nocache
 //#define MEMCPY my_memcpy_nocache
-#define MEMCPY mmx2_memcpy
+//#define MEMCPY mmx2_memcpy
 #define MMAP mmap
 #define FSYNC fsync
 
