@@ -39,6 +39,7 @@ int _print_file_stats(int fd)
 		DEBUG("pos in file %s: %i\n", path, result);
 		DEBUG("file len %i\n", file_st.st_size);
 
+		(void)result;
 //		if(once && file_st.st_size == 105766836) { _nvp_debug_handoff(); once = 0;}
 	}
 //	return result;
