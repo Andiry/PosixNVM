@@ -560,11 +560,11 @@ void nvp_cleanup_node(struct NVNode *node, int free_root)
 
 	node->height = 0;
 
-	if (node->root && free_root) {
-		free(node->root);
-		node->root = NULL;
-		return;
-	}
+//	if (node->root && free_root) {
+//		free(node->root);
+//		node->root = NULL;
+//		return;
+//	}
 
 	if (node->root)
 		memset(node->root, 0, 1024 * sizeof(unsigned long));
