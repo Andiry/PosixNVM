@@ -2229,32 +2229,15 @@ RETT_PWRITE _bankshot2_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 		#endif
 		int fallocated = 0;
 
-		DEBUG("Request write length %li will extend file. (filelen=%li, offset=%li, count=%li, extension=%li)\n",
+		if (!wr_lock) {
+			NVP_UNLOCK_NODE_RD(nvf, cpuid);
+			NVP_LOCK_NODE_WR(nvf);
+		}
+
+		DEBUG("Request write length %li will extend file. "
+			"(filelen=%li, offset=%li, count=%li, extension=%li)\n",
 			count, nvf->node->length, offset, count, extension);
 		
-#if 0
-		ssize_t temp_result;
-		if(nvf->aligned) {
-			DEBUG_P("(aligned): %s->PWRITE(%i, %p, %li, %li)\n", _bankshot2_fileops->name, nvf->fd, _bankshot2_zbuf, 512, count+offset-512);
-			temp_result = _bankshot2_fileops->PWRITE(nvf->fd, _bankshot2_zbuf, 512, count + offset - 512);
-		} else {
-			DEBUG_P("(unaligned)\n");
-			temp_result = _bankshot2_fileops->PWRITE(nvf->fd, "\0", 1, count + offset - 1);
-		}	
-
-		if(temp_result != ((nvf->aligned)?512:1))
-		{
-			ERROR("Failed to use posix->pwrite to extend the file to the required length: returned %li, expected %li: %s\n", temp_result, ((nvf->aligned)?512:1), strerror(errno));
-			if(nvf->aligned) {
-				ERROR("Perhaps it's because this write needed to be aligned?\n");
-			}
-			PRINT_ERROR_NAME(errno);
-			assert(0);
-		}
-#endif
-//		posix_write = _bankshot2_fileops->PWRITE(file, buf,
-//					count, offset);
-
 #if ENABLE_FALLOC
 		if (extension < 32768)
 			goto do_pwrite;
@@ -2286,7 +2269,15 @@ do_pwrite:
 						offset + posix_write);
 			write_count = posix_write;
 			nvf->node->num_posix_writes++;
+			if (!wr_lock) {
+				NVP_UNLOCK_NODE_WR(nvf);
+				NVP_LOCK_NODE_RD(nvf, cpuid);
+			}
 			goto out;
+		}
+		if (!wr_lock) {
+			NVP_UNLOCK_NODE_WR(nvf);
+			NVP_LOCK_NODE_RD(nvf, cpuid);
 		}
 	}
 	else
