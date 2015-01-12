@@ -764,6 +764,9 @@ not_found:
 
 	NVP_START_TIMING(mmap_t, mmap_time);
 
+	DEBUG("mmap offset 0x%lx, start_offset 0x%lx, length 0x%lx\n",
+		offset, start_offset, nvf->node->length);
+
 	int max_perms = ((nvf->canRead) ? PROT_READ : 0) | 
 			((nvf->canWrite) ? PROT_WRITE : 0);
 	start_addr = (unsigned long) FSYNC_MMAP
@@ -789,7 +792,7 @@ not_found:
 		assert(0);
 	}
 
-	DEBUG("mmap offset 0x%lx, start_offset 0x%lx\n", offset, start_offset);
+//	MSG("mmap offset 0x%lx, start_offset 0x%lx, length 0x%lx\n", offset, start_offset, nvf->node->length);
 
 	height = nvf->node->height;
 	new_height = calculate_new_height(offset);
@@ -1063,6 +1066,10 @@ RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 	
 	if(extension > 0)
 	{
+		if (!wr_lock) {
+			NVP_UNLOCK_NODE_RD(nvf, cpuid);
+			NVP_LOCK_NODE_WR(nvf);
+		}
 		_nvp_wr_extended++;
 
 		DEBUG("Request write length %li will extend file. "
@@ -1095,6 +1102,10 @@ RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 		}
 
 		nvf->node->length += extension;
+		if (!wr_lock) {
+			NVP_UNLOCK_NODE_WR(nvf);
+			NVP_LOCK_NODE_RD(nvf, cpuid);
+		}
 		return temp_result;
 	}
 	else
