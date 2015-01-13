@@ -1,6 +1,7 @@
 // Header file for nvmfileops.c
 
 #include "nv_common.h"
+#include "ioctl.h"
 
 #define ENV_NV_FOP "NVP_NV_FOP"
 
@@ -21,7 +22,7 @@ struct NVFile
 	ino_t serialno; // duplicated so that iterating doesn't require following every node*
 	struct NVNode* node;
 	bool posix;
-	bool debug;
+	int pmfs_sync;
 };
 
 struct NVNode
@@ -33,9 +34,17 @@ struct NVNode
 	volatile size_t maplength;
 	unsigned long *root;
 	unsigned int height;
+	off_t last_write_offset;
+	size_t last_write_length;
 	int reference;
 //	volatile int maxPerms;
 //	volatile int valid; // for debugging purposes
+};
+
+// PMFS SYNC
+struct sync_range {
+	off_t offset;
+	size_t length;
 };
 
 /******************* Locking ********************/

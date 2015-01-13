@@ -1576,7 +1576,7 @@ RETT_OPEN _nvp_OPEN(INTF_OPEN)
 	DEBUG("Meh, why not allocate a new map every time\n");
 	//nvf->node->maplength = -1;
 	nvf->posix = 0;
-	nvf->debug = 0;
+	nvf->pmfs_sync = 0;
 
 	/* This is a nasty workaround for FIO */
 	if (path[0] == '/' && path[1] == 's'
@@ -1587,7 +1587,7 @@ RETT_OPEN _nvp_OPEN(INTF_OPEN)
 
 	/* For BDB log file, workaround the fdsync issue */
 	if (path[29] == 'l' && path[30] == 'o' && path[31] == 'g') {
-		nvf->debug = 1;
+		nvf->pmfs_sync = 1;
 //		MSG("A Posix Path: %s\n", path);
 	}
 
@@ -1757,6 +1757,9 @@ RETT_WRITE _nvp_WRITE(INTF_WRITE)
 		write_size += result;
 		num_posix_write++;
 		posix_write_size += result;
+		nvf->node->last_write_offset = *nvf->offset - result;
+		nvf->node->last_write_length = result;
+
 		return result;
 	}
 
@@ -1805,10 +1808,13 @@ RETT_WRITE _nvp_WRITE(INTF_WRITE)
 
 	DEBUG("About to return from _nvp_WRITE with ret val %i (errno %i). "
 		"file len: %li, file off: %li, map len: %li\n",
-		result, errno, nvf->node->length, nvf->offset,
+		result, errno, nvf->node->length, *nvf->offset,
 		nvf->node->maplength);
 
 	DO_MSYNC(nvf);
+
+	nvf->node->last_write_offset = *nvf->offset - result;
+	nvf->node->last_write_length = result;
 
 	NVP_UNLOCK_FD_RD(nvf, cpuid);
 
@@ -1879,6 +1885,9 @@ RETT_PWRITE _nvp_PWRITE(INTF_PWRITE)
 		write_size += result;
 		num_posix_write++;
 		posix_write_size += result;
+		nvf->node->last_write_offset = offset;
+		nvf->node->last_write_length = result;
+
 		return result;
 	}
 
@@ -1906,6 +1915,9 @@ RETT_PWRITE _nvp_PWRITE(INTF_PWRITE)
 		result = _nvp_do_pwrite(CALL_PWRITE, 0, cpuid);
 		NVP_UNLOCK_NODE_RD(nvf, cpuid);
 	}
+
+	nvf->node->last_write_offset = offset;
+	nvf->node->last_write_length = result;
 
 	NVP_UNLOCK_FD_RD(nvf, cpuid);
 
@@ -2344,12 +2356,16 @@ RETT_FDSYNC _nvp_FDSYNC(INTF_FDSYNC)
 	struct NVFile* nvf = &_nvp_fd_lookup[file];
 	RETT_FDSYNC result;
 	timing_type fdsync_time;
+	struct sync_range packet;
 
 	NVP_START_TIMING(fdsync_t, fdsync_time);
-	if (nvf->debug)
-		result = 0;
-	else
+	if (nvf->pmfs_sync) {
+		packet.offset = nvf->node->last_write_offset;
+		packet.length = nvf->node->last_write_length;
+		result = _nvp_fileops->IOCTL(file, FS_PMFS_FSYNC, &packet);
+	} else {
 		result = _nvp_fileops->FDSYNC(CALL_FDSYNC);
+	}
 	NVP_END_TIMING(fdsync_t, fdsync_time);
 
 	return result;
