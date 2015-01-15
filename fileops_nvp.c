@@ -404,12 +404,14 @@ unsigned int num_memcpy_read;
 unsigned int num_memcpy_write;
 unsigned int num_posix_read;
 unsigned int num_posix_write;
+unsigned int num_fdsync;
 unsigned long long read_size;
 unsigned long long write_size;
 unsigned long long memcpy_read_size;
 unsigned long long memcpy_write_size;
 unsigned long long posix_read_size;
 unsigned long long posix_write_size;
+unsigned long long total_fdsync_size;
 volatile size_t _nvp_wr_extended;
 volatile size_t _nvp_wr_total;
 
@@ -435,6 +437,9 @@ void nvp_print_io_stats(void)
 		num_posix_write ? posix_write_size / num_posix_write : 0);
 	printf("write extends %lu, total %lu\n", _nvp_wr_extended,
 		_nvp_wr_total);
+	printf("Fdsync: count %u, size %llu, average %llu\n",
+		num_fdsync, total_fdsync_size,
+		num_fdsync ? total_fdsync_size / num_fdsync : 0);
 }
 
 /* ========================== Internal methods =========================== */
@@ -2362,6 +2367,8 @@ RETT_FDSYNC _nvp_FDSYNC(INTF_FDSYNC)
 	if (nvf->pmfs_sync) {
 		packet.offset = nvf->node->last_write_offset;
 		packet.length = nvf->node->last_write_length;
+		num_fdsync++;
+		total_fdsync_size += packet.length;
 		result = _nvp_fileops->IOCTL(file, FS_PMFS_FSYNC, &packet);
 	} else {
 		result = _nvp_fileops->FDSYNC(CALL_FDSYNC);
