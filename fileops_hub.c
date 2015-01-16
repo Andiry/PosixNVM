@@ -603,7 +603,7 @@ RETT_MKSTEMP _hub_MKSTEMP(INTF_MKSTEMP)
 		}
 
 		// generate a valid file name
-		mkstemp(file);
+		mktemp(file);
 
 		DEBUG("Generated filename %s.  Calling (regular) open...\n", file);
 		
