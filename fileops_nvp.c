@@ -320,6 +320,7 @@ enum timing_category {
 	fdsync_t,
 	mmap_t,
 	get_mmap_t,
+	wr_extend_t,
 	TIMING_NUM,	// Keep as last entry
 };
 
@@ -347,6 +348,7 @@ const char *Timingstring[TIMING_NUM] =
 	"Fdsync",
 	"mmap",
 	"get_mmap_addr",
+	"write_extend",
 };
 
 typedef struct timespec timing_type;
@@ -1071,6 +1073,9 @@ RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 	
 	if(extension > 0)
 	{
+		timing_type wr_extend_time;
+		NVP_START_TIMING(wr_extend_t, wr_extend_time);
+
 		if (!wr_lock) {
 			NVP_UNLOCK_NODE_RD(nvf, cpuid);
 			NVP_LOCK_NODE_WR(nvf);
@@ -1111,6 +1116,7 @@ RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 			NVP_UNLOCK_NODE_WR(nvf);
 			NVP_LOCK_NODE_RD(nvf, cpuid);
 		}
+		NVP_END_TIMING(wr_extend_t, wr_extend_time);
 		return temp_result;
 	}
 	else
