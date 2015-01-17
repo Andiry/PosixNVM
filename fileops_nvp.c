@@ -1703,16 +1703,18 @@ RETT_READ _nvp_READ(INTF_READ)
 	if (nvf->posix) {
 		DEBUG("Call posix READ for fd %d\n", nvf->fd);
 		result = _nvp_fileops->READ(CALL_READ);
-		NVP_END_TIMING(read_t, read_time);
 		read_size += result;
 		num_posix_read++;
 		posix_read_size += result;
+		NVP_END_TIMING(read_t, read_time);
 		return result;
 	}
 
 	result = _nvp_check_read_size_valid(length);
-	if (result <= 0)
+	if (result <= 0) {
+		NVP_END_TIMING(read_t, read_time);
 		return result;
+	}
 
 	int cpuid = GET_CPUID();
 
@@ -1744,9 +1746,9 @@ RETT_READ _nvp_READ(INTF_READ)
 
 	NVP_UNLOCK_FD_RD(nvf, cpuid);
 
-	NVP_END_TIMING(read_t, read_time);
 	num_read++;
 	read_size += result;
+	NVP_END_TIMING(read_t, read_time);
 
 	return result;
 }
@@ -1764,12 +1766,12 @@ RETT_WRITE _nvp_WRITE(INTF_WRITE)
 	if (nvf->posix) {
 		DEBUG("Call posix WRITE for fd %d\n", nvf->fd);
 		result = _nvp_fileops->WRITE(CALL_WRITE);
-		NVP_END_TIMING(write_t, write_time);
 		write_size += result;
 		num_posix_write++;
 		posix_write_size += result;
 		nvf->node->last_write_offset = *nvf->offset - result;
 		nvf->node->last_write_length = result;
+		NVP_END_TIMING(write_t, write_time);
 
 		return result;
 	}
@@ -1777,8 +1779,10 @@ RETT_WRITE _nvp_WRITE(INTF_WRITE)
 	//int iter;
 	int cpuid = GET_CPUID();
 	result = _nvp_check_write_size_valid(length);
-	if (result <= 0)
+	if (result <= 0) {
+		NVP_END_TIMING(write_t, write_time);
 		return result;
+	}
 
 	NVP_LOCK_FD_RD(nvf, cpuid); // TODO
 	NVP_CHECK_NVF_VALID_WR(nvf);
@@ -1827,11 +1831,10 @@ RETT_WRITE _nvp_WRITE(INTF_WRITE)
 	nvf->node->last_write_offset = *nvf->offset - result;
 	nvf->node->last_write_length = result;
 
-	NVP_UNLOCK_FD_RD(nvf, cpuid);
-
 	NVP_END_TIMING(write_t, write_time);
 	write_size += result;
 
+	NVP_UNLOCK_FD_RD(nvf, cpuid);
 	return result;
 }
 
@@ -1850,16 +1853,18 @@ RETT_PREAD _nvp_PREAD(INTF_PREAD)
 	if (nvf->posix) {
 		DEBUG("Call posix PREAD for fd %d\n", nvf->fd);
 		result = _nvp_fileops->PREAD(CALL_PREAD);
-		NVP_END_TIMING(pread_t, read_time);
 		read_size += result;
 		num_posix_read++;
 		posix_read_size += result;
+		NVP_END_TIMING(pread_t, read_time);
 		return result;
 	}
 
 	result = _nvp_check_read_size_valid(count);
-	if (result <= 0)
+	if (result <= 0) {
+		NVP_END_TIMING(pread_t, read_time);
 		return result;
+	}
 
 	int cpuid = GET_CPUID();
 	NVP_LOCK_FD_RD(nvf, cpuid);
@@ -1871,9 +1876,9 @@ RETT_PREAD _nvp_PREAD(INTF_PREAD)
 	NVP_UNLOCK_NODE_RD(nvf, cpuid);
 	NVP_UNLOCK_FD_RD(nvf, cpuid);
 
-	NVP_END_TIMING(pread_t, read_time);
 	read_size += result;
 
+	NVP_END_TIMING(pread_t, read_time);
 	return result;
 }
 
@@ -1892,20 +1897,22 @@ RETT_PWRITE _nvp_PWRITE(INTF_PWRITE)
 	if (nvf->posix) {
 		DEBUG("Call posix PWRITE for fd %d\n", nvf->fd);
 		result = _nvp_fileops->PWRITE(CALL_PWRITE);
-		NVP_END_TIMING(pwrite_t, write_time);
 		write_size += result;
 		num_posix_write++;
 		posix_write_size += result;
 		nvf->node->last_write_offset = offset;
 		nvf->node->last_write_length = result;
 
+		NVP_END_TIMING(pwrite_t, write_time);
 		return result;
 	}
 
 	result = _nvp_check_write_size_valid(count);
-	if (result <= 0)
+	if (result <= 0) {
+		NVP_END_TIMING(pwrite_t, write_time);
 		return result;
-	
+	}
+
 	int cpuid = GET_CPUID();
 	NVP_LOCK_FD_RD(nvf, cpuid);
 	NVP_CHECK_NVF_VALID(nvf);
@@ -1932,9 +1939,9 @@ RETT_PWRITE _nvp_PWRITE(INTF_PWRITE)
 
 	NVP_UNLOCK_FD_RD(nvf, cpuid);
 
-	NVP_END_TIMING(pwrite_t, write_time);
 	write_size += result;
 
+	NVP_END_TIMING(pwrite_t, write_time);
 	return result;
 }
 
