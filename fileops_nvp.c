@@ -410,15 +410,17 @@ unsigned int num_memcpy_read;
 unsigned int num_memcpy_write;
 unsigned int num_posix_read;
 unsigned int num_posix_write;
+unsigned int _nvp_wr_extended;
 unsigned int num_fdsync;
+unsigned int num_read_length_update;
 unsigned long long read_size;
 unsigned long long write_size;
 unsigned long long memcpy_read_size;
 unsigned long long memcpy_write_size;
 unsigned long long posix_read_size;
 unsigned long long posix_write_size;
+unsigned long long write_extend_size;
 unsigned long long total_fdsync_size;
-volatile size_t _nvp_wr_extended;
 volatile size_t _nvp_wr_total;
 
 void nvp_print_io_stats(void)
@@ -441,8 +443,10 @@ void nvp_print_io_stats(void)
 	printf("posix WRITE: count %u, size %llu, average %llu\n",
 		num_posix_write, posix_write_size,
 		num_posix_write ? posix_write_size / num_posix_write : 0);
-	printf("write extends %lu, total %lu\n", _nvp_wr_extended,
-		_nvp_wr_total);
+	printf("write extends: count %u, size %llu, average %llu\n",
+		_nvp_wr_extended, write_extend_size,
+		_nvp_wr_extended ? write_extend_size / _nvp_wr_extended : 0);
+	printf("Read update length %u\n", num_read_length_update);
 	printf("Fdsync: count %u, size %llu, average %llu\n",
 		num_fdsync, total_fdsync_size,
 		num_fdsync ? total_fdsync_size / num_fdsync : 0);
@@ -979,8 +983,10 @@ RETT_PREAD _nvp_do_pread(INTF_PREAD, int wr_lock, int cpuid)
 			NVP_START_TIMING(posix_read_t, posix_read_time);
 			posix_read = _nvp_fileops->PREAD(file, buf,
 					len_to_read, read_offset);
-			if (read_offset + posix_read > nvf->node->length)
+			if (read_offset + posix_read > nvf->node->length) {
+				num_read_length_update++;
 				nvf->node->length = read_offset + posix_read;
+			}
 			read_count += posix_read;
 			num_posix_read++;
 			posix_read_size += posix_read;
@@ -1104,8 +1110,7 @@ RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 		}	
 
 		temp_result = _nvp_fileops->PWRITE(nvf->fd, buf, count, offset);
-		num_posix_write++;
-		posix_write_size += temp_result;
+		write_extend_size += temp_result;
 		DEBUG("Done extending NVFile, now let's extend mapping.\n");
 
 		if( offset+count >= nvf->node->maplength )
