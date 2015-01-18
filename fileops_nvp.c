@@ -875,9 +875,8 @@ RETT_PREAD _nvp_do_pread(INTF_PREAD, int wr_lock, int cpuid)
 {
 	struct NVFile* nvf = &_nvp_fd_lookup[file];
 	SANITYCHECKNVF(nvf);
-	timing_type do_pread_time, memcpyr_time, get_mmap_time;
+	timing_type memcpyr_time, get_mmap_time;
 	timing_type posix_read_time;
-	NVP_START_TIMING(do_pread_t, do_pread_time);
 	int ret;
 	off_t read_offset;
 	size_t read_count, extent_length;
@@ -956,7 +955,6 @@ RETT_PREAD _nvp_do_pread(INTF_PREAD, int wr_lock, int cpuid)
 		DEBUG("Invalid read. offset %lu, count %lu, length %lu\n",
 				offset, count, nvf->node->length);
 		num_posix_read++;
-		NVP_END_TIMING(do_pread_t, do_pread_time);
 		return 0; // reading 0 bytes is easy!
 	}
 
@@ -1013,7 +1011,6 @@ RETT_PREAD _nvp_do_pread(INTF_PREAD, int wr_lock, int cpuid)
 
 	DO_MSYNC(nvf);
 out:
-	NVP_END_TIMING(do_pread_t, do_pread_time);
 	return read_count;
 }
 
@@ -1021,9 +1018,8 @@ out:
 RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 {
 	CHECK_RESOLVE_FILEOPS(_nvp_);
-	timing_type do_pwrite_time, memcpyw_time, get_mmap_time;
+	timing_type memcpyw_time, get_mmap_time;
 	timing_type posix_write_time;
-	NVP_START_TIMING(do_pwrite_t, do_pwrite_time);
 	int ret;
 	off_t write_offset;
 	size_t write_count, extent_length;
@@ -1215,7 +1211,6 @@ RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 	DO_MSYNC(nvf);
 
 out:
-	NVP_END_TIMING(do_pwrite_t, do_pwrite_time);
 	return write_count;
 }
 
@@ -1708,7 +1703,7 @@ RETT_CLOSE _nvp_CLOSE(INTF_CLOSE)
 RETT_READ _nvp_READ(INTF_READ)
 {
 	DEBUG("_nvp_READ %d\n", file);
-	timing_type read_time;
+	timing_type read_time, do_pread_time;
 	RETT_READ result;
 	NVP_START_TIMING(read_t, read_time);
 
@@ -1737,8 +1732,10 @@ RETT_READ _nvp_READ(INTF_READ)
 
 	NVP_LOCK_NODE_RD(nvf, cpuid);
 
+	NVP_START_TIMING(do_pread_t, do_pread_time);
 	result = _nvp_do_pread(CALL_READ,
 			__sync_fetch_and_add(nvf->offset, length), 0, cpuid);
+	NVP_END_TIMING(do_pread_t, do_pread_time);
 
 	NVP_UNLOCK_NODE_RD(nvf, cpuid);
 	
@@ -1771,7 +1768,7 @@ RETT_WRITE _nvp_WRITE(INTF_WRITE)
 {
 	DEBUG("_nvp_WRITE %d\n", file);
 	num_write++;
-	timing_type write_time;
+	timing_type write_time, do_pwrite_time;
 	RETT_WRITE result;
 	NVP_START_TIMING(write_t, write_time);
 
@@ -1802,8 +1799,10 @@ RETT_WRITE _nvp_WRITE(INTF_WRITE)
 	NVP_CHECK_NVF_VALID_WR(nvf);
 	NVP_LOCK_NODE_RD(nvf, cpuid); //TODO
 
+	NVP_START_TIMING(do_pwrite_t, do_pwrite_time);
 	result = _nvp_do_pwrite(CALL_WRITE,
 			__sync_fetch_and_add(nvf->offset, length), 0, cpuid);
+	NVP_END_TIMING(do_pwrite_t, do_pwrite_time);
 
 	NVP_UNLOCK_NODE_RD(nvf, cpuid);
 
@@ -1858,7 +1857,7 @@ RETT_PREAD _nvp_PREAD(INTF_PREAD)
 
 	DEBUG("_nvp_PREAD %d\n", file);
 	num_read++;
-	timing_type read_time;
+	timing_type read_time, do_pread_time;
 	RETT_PREAD result;
 	NVP_START_TIMING(pread_t, read_time);
 
@@ -1885,7 +1884,9 @@ RETT_PREAD _nvp_PREAD(INTF_PREAD)
 	NVP_CHECK_NVF_VALID(nvf);
 	NVP_LOCK_NODE_RD(nvf, cpuid);
 
+	NVP_START_TIMING(do_pread_t, do_pread_time);
 	result = _nvp_do_pread(CALL_PREAD, 0, cpuid);
+	NVP_END_TIMING(do_pread_t, do_pread_time);
 
 	NVP_UNLOCK_NODE_RD(nvf, cpuid);
 	NVP_UNLOCK_FD_RD(nvf, cpuid);
@@ -1902,7 +1903,7 @@ RETT_PWRITE _nvp_PWRITE(INTF_PWRITE)
 
 	DEBUG("_nvp_PWRITE %d\n", file);
 	num_write++;
-	timing_type write_time;
+	timing_type write_time, do_pwrite_time;
 	RETT_PWRITE result;
 	NVP_START_TIMING(pwrite_t, write_time);
 
@@ -1939,12 +1940,17 @@ RETT_PWRITE _nvp_PWRITE(INTF_PWRITE)
 		NVP_UNLOCK_NODE_RD(nvf, cpuid);
 		NVP_LOCK_NODE_WR(nvf);
 		
+		NVP_START_TIMING(do_pwrite_t, do_pwrite_time);
 		result = _nvp_do_pwrite(CALL_PWRITE, 1, cpuid);
+		NVP_END_TIMING(do_pwrite_t, do_pwrite_time);
 
 		NVP_UNLOCK_NODE_WR(nvf);
 	}
 	else {
+		NVP_START_TIMING(do_pwrite_t, do_pwrite_time);
 		result = _nvp_do_pwrite(CALL_PWRITE, 0, cpuid);
+		NVP_END_TIMING(do_pwrite_t, do_pwrite_time);
+
 		NVP_UNLOCK_NODE_RD(nvf, cpuid);
 	}
 
