@@ -953,15 +953,14 @@ RETT_PREAD _nvp_do_pread(INTF_PREAD, int wr_lock, int cpuid)
 
 	if(UNLIKELY( (len_to_read <= 0) || (available_length <= 0) ))
 	{
+		DEBUG("Invalid read. offset %lu, count %lu, length %lu\n",
+				offset, count, nvf->node->length);
+		num_posix_read++;
 		NVP_END_TIMING(do_pread_t, do_pread_time);
 		return 0; // reading 0 bytes is easy!
 	}
 
-	DEBUG("mmap is length %li, len_to_read is %li\n", nvf->node->maplength,
-		len_to_read);
-
 	SANITYCHECK(len_to_read + offset <= nvf->node->length);
-//	SANITYCHECK(nvf->node->length < nvf->node->maplength);
 
 	read_count = 0;
 	read_offset = offset;
