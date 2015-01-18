@@ -321,6 +321,8 @@ enum timing_category {
 	mmap_t,
 	get_mmap_t,
 	wr_extend_t,
+	posix_read_t,
+	posix_write_t,
 	TIMING_NUM,	// Keep as last entry
 };
 
@@ -349,6 +351,8 @@ const char *Timingstring[TIMING_NUM] =
 	"mmap",
 	"get_mmap_addr",
 	"write_extend",
+	"Posix READ",
+	"Posix WRITE",
 };
 
 typedef struct timespec timing_type;
@@ -868,6 +872,7 @@ RETT_PREAD _nvp_do_pread(INTF_PREAD, int wr_lock, int cpuid)
 	struct NVFile* nvf = &_nvp_fd_lookup[file];
 	SANITYCHECKNVF(nvf);
 	timing_type do_pread_time, memcpyr_time, get_mmap_time;
+	timing_type posix_read_time;
 	NVP_START_TIMING(do_pread_t, do_pread_time);
 	int ret;
 	off_t read_offset;
@@ -971,6 +976,7 @@ RETT_PREAD _nvp_do_pread(INTF_PREAD, int wr_lock, int cpuid)
  		case 0: // Mmaped. Do memcpy.
 			break;
 		case 1: // Not mmaped. Calling Posix pread.
+			NVP_START_TIMING(posix_read_t, posix_read_time);
 			posix_read = _nvp_fileops->PREAD(file, buf,
 					len_to_read, read_offset);
 			if (read_offset + posix_read > nvf->node->length)
@@ -978,6 +984,7 @@ RETT_PREAD _nvp_do_pread(INTF_PREAD, int wr_lock, int cpuid)
 			read_count += posix_read;
 			num_posix_read++;
 			posix_read_size += posix_read;
+			NVP_END_TIMING(posix_read_t, posix_read_time);
 			goto out;
 		default:
 			break;
@@ -1010,6 +1017,7 @@ RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 {
 	CHECK_RESOLVE_FILEOPS(_nvp_);
 	timing_type do_pwrite_time, memcpyw_time, get_mmap_time;
+	timing_type posix_write_time;
 	NVP_START_TIMING(do_pwrite_t, do_pwrite_time);
 	int ret;
 	off_t write_offset;
@@ -1163,6 +1171,7 @@ RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
  		case 0: // Mmaped. Do memcpy.
 			break;
 		case 1: // Not mmaped. Calling Posix pread.
+			NVP_START_TIMING(posix_write_t, posix_write_time);
 			posix_write = _nvp_fileops->PWRITE(file, buf,
 					len_to_write, write_offset);
 			if (write_offset + posix_write > nvf->node->length)
@@ -1170,6 +1179,7 @@ RETT_PWRITE _nvp_do_pwrite(INTF_PWRITE, int wr_lock, int cpuid)
 			write_count += posix_write;
 			num_posix_write++;
 			posix_write_size += posix_write;
+			NVP_END_TIMING(posix_write_t, posix_write_time);
 			goto out;
 		default:
 			break;
