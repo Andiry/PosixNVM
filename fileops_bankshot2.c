@@ -2989,6 +2989,8 @@ RETT_FSYNC _bankshot2_FSYNC(INTF_FSYNC)
 		assert(0);
 	data.carrier = (char *)carrier;
 	data.cache_ino = nvf->cache_serialno;
+	data.offset = nvf->node->last_write_offset;
+	data.size = nvf->node->last_write_length;
 	data.datasync = 0;
 
 	BANKSHOT2_START_TIMING(fsync_t, fsync_time);
@@ -3015,6 +3017,8 @@ RETT_FDSYNC _bankshot2_FDSYNC(INTF_FDSYNC)
 		assert(0);
 	data.carrier = (char *)carrier;
 	data.cache_ino = nvf->cache_serialno;
+	data.offset = nvf->node->last_write_offset;
+	data.size = nvf->node->last_write_length;
 	data.datasync = 1;
 
 	BANKSHOT2_START_TIMING(fdsync_t, fdsync_time);
