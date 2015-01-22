@@ -1782,6 +1782,7 @@ RETT_WRITE _nvp_WRITE(INTF_WRITE)
 		posix_write_size += result;
 		nvf->node->last_write_offset = *nvf->offset - result;
 		nvf->node->last_write_length = result;
+		__sync_fetch_and_add(nvf->offset, result);
 		NVP_END_TIMING(write_t, write_time);
 
 		return result;
