@@ -93,6 +93,8 @@ struct NVNode
 //	volatile int valid; // for debugging purposes
 	volatile size_t cache_length;
 	ino_t cache_serialno; // duplicated so that iterating doesn't require following every node*
+	off_t last_write_offset;
+	size_t last_write_length;
 	unsigned long num_reads;
 	unsigned long num_writes;
 	unsigned long num_posix_writes;

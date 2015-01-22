@@ -1434,6 +1434,9 @@ RETT_WRITE _bankshot2_WRITE(INTF_WRITE)
 		result = _bankshot2_fileops->WRITE(CALL_WRITE);
 		BANKSHOT2_END_TIMING(write_t, write_time);
 		total_write_size += result;
+		nvf->node->last_write_offset = *nvf->offset;
+		nvf->node->last_write_length = result;
+		__sync_fetch_and_add(nvf->offset, result);
 		return result;
 	}
 
@@ -1474,9 +1477,10 @@ RETT_WRITE _bankshot2_WRITE(INTF_WRITE)
 		// assert(0); // TODO: this is for testing only
 	}
 
-	DEBUG("About to return from _bankshot2_WRITE with ret val %i (errno %i).  file len: %li, file off: %li, map len: %li\n", result, errno, nvf->node->length, nvf->offset, nvf->node->maplength);
-
 	DO_MSYNC(nvf);
+
+	nvf->node->last_write_offset = *nvf->offset - result;
+	nvf->node->last_write_length = result;
 
 	NVP_UNLOCK_FD_RD(nvf, cpuid);
 
@@ -1553,6 +1557,8 @@ RETT_PWRITE _bankshot2_PWRITE(INTF_PWRITE)
 		result = _bankshot2_fileops->PWRITE(CALL_PWRITE);
 		BANKSHOT2_END_TIMING(pwrite_t, pwrite_time);
 		total_pwrite_size += result;
+		nvf->node->last_write_offset = offset;
+		nvf->node->last_write_length = result;
 		return result;
 	}
 
@@ -1583,6 +1589,9 @@ RETT_PWRITE _bankshot2_PWRITE(INTF_PWRITE)
 		result = _bankshot2_do_pwrite(CALL_PWRITE, 0, cpuid);
 		NVP_UNLOCK_NODE_RD(nvf, cpuid);
 	}
+
+	nvf->node->last_write_offset = offset;
+	nvf->node->last_write_length = result;
 
 	NVP_UNLOCK_FD_RD(nvf, cpuid);
 
@@ -3046,8 +3055,8 @@ RETT_FSYNC _bankshot2_FSYNC(INTF_FSYNC)
 	memset(&data, 0, sizeof(struct bankshot2_cache_data));
 	data.file = nvf->fd;
 	data.cache_ino = nvf->cache_serialno;
-	data.offset = 0;
-	data.size = nvf->node->length;
+	data.offset = nvf->node->last_write_offset;
+	data.size = nvf->node->last_write_length;
 	data.datasync = 0;
 
 	BANKSHOT2_START_TIMING(fsync_t, fsync_time);
@@ -3068,8 +3077,8 @@ RETT_FDSYNC _bankshot2_FDSYNC(INTF_FDSYNC)
 	memset(&data, 0, sizeof(struct bankshot2_cache_data));
 	data.file = nvf->fd;
 	data.cache_ino = nvf->cache_serialno;
-	data.offset = 0;
-	data.size = nvf->node->length;
+	data.offset = nvf->node->last_write_offset;
+	data.size = nvf->node->last_write_length;
 	data.datasync = 1;
 
 	BANKSHOT2_START_TIMING(fdsync_t, fdsync_time);
