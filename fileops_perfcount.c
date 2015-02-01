@@ -23,7 +23,8 @@ BOOST_PP_SEQ_FOR_EACH(COUNTVAR_IWRAP, x, ALLOPS_WPAREN)
 	RETT_##FUNCT _perfcount_##FUNCT(INTF_##FUNCT) { \
 		CHECK_RESOLVE_FILEOPS(_perfcount_); \
 		RETT_##FUNCT ret; \
-		timing_t start_time = perf_start_timing(); \
+		timing_type start_time; \
+		perf_start_timing(FUNCT##_stat, start_time); \
 		ret = _perfcount_fileops->FUNCT(CALL_##FUNCT); \
 		perf_end_timing(FUNCT##_stat, start_time); \
 		return ret; \
@@ -38,7 +39,8 @@ RETT_OPEN _perfcount_OPEN(INTF_OPEN)
 
 	RETT_OPEN ret;
 
-	timing_t start_time = perf_start_timing();
+	timing_type start_time;
+	perf_start_timing(OPEN_stat, start_time);
 	
 	if (FLAGS_INCLUDE(oflag, O_CREAT))
 	{
@@ -60,7 +62,8 @@ RETT_IOCTL _perfcount_IOCTL(INTF_IOCTL)
 {
 	CHECK_RESOLVE_FILEOPS(_perfcount_);
 	
-	timing_t start_time = perf_start_timing();
+	timing_type start_time;
+	perf_start_timing(IOCTL_stat, start_time);
 	
 	va_list arg;
 	va_start(arg, request);

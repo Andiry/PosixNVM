@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 typedef uint64_t timing_t;
+typedef struct timespec timing_type;
 
 #define MY_ALIGNED __attribute__ ((__aligned__(256)))
 
@@ -32,6 +33,7 @@ static inline timing_t getcycles(void) {
 	"=a" (ax), "=b" (bx), "=c" (cx), "=d" (dx) : "a" (func));
 
 static inline int get_cpuid() {
+/*
 	uint32_t eax=0;
 	uint32_t ebx=0;
 	uint32_t ecx=1;
@@ -40,7 +42,8 @@ static inline int get_cpuid() {
 	cpuid(0x0B, eax,ebx,ecx,edx);
 
 	int id = (((edx&1)<<3) + ((edx>>4)&1) + (edx&0xe));
-	return id;
+*/
+	return sched_getcpu();
 }
 
 #define perf_clear_stat(s) { \
@@ -64,17 +67,17 @@ static inline struct vm_timing_stat perf_condense_stat(stat_per_cpu s) {
 }
 
 //static inline timing_t start_timing()
-#define perf_start_timing getcycles
+#define perf_start_timing(name, start) \
+	clock_gettime(CLOCK_MONOTONIC, &start)
 
 // static inline void end_timing(stat_per_cpu s, timing_t start_time) {
-#define perf_end_timing(s, start_time) { \
-	timing_t end_time = getcycles(); \
-	int cpu = get_cpuid(); \
-	if ( end_time > start_time ) { \
-		s[cpu].count++; \
-		s[cpu].total_time += end_time - start_time; \
-	} \
-}
+#define perf_end_timing(s, start) { \
+	timing_type end; \
+	clock_gettime(CLOCK_MONOTONIC, &end); \
+	s[0].count++; \
+	s[0].total_time += (end.tv_sec - start.tv_sec) * 1e9 + (end.tv_nsec - start.tv_nsec); }
+
+
 //TODO: why do we only add on this case?
 
 // static inline void perf_increment_count(stat_per_cpu s) {
@@ -88,13 +91,15 @@ static inline void perf_print_stat(FILE* fd, stat_per_cpu s, const char* name)
 
 	struct vm_timing_stat result = perf_condense_stat(s);
 
-	float cycles_per_count = ((float)result.total_time)/((float)result.count);
+	if (result.count == 0)
+		return;
 
-	fprintf(fd, "Finished timing \"%s\": %lu results in %lu cycles: "
-	"%f cycles per result; %f microseconds per result (assuming clock of 2.26GHz)\n",
+	uint64_t nano_per_count = (result.total_time) / (result.count);
+
+	fprintf(fd, "Finished timing \"%s\": %lu results in %lu ns: "
+	"%lu ns per result\n",
 	name, result.count, result.total_time,
-	cycles_per_count,
-	cycles_per_count/2261L); // TODO: measure clock speed instead of assuming
+	nano_per_count);
 }	
 
 #endif
