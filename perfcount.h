@@ -96,8 +96,13 @@ static inline void perf_print_stat(FILE* fd, stat_per_cpu s, const char* name)
 
 	uint64_t nano_per_count = (result.total_time) / (result.count);
 
-	fprintf(fd, "Finished timing \"%s\": %lu results in %lu ns: "
-	"%lu ns per result\n",
+	fprintf(fd, "Finished timing \"%s\": %lu ops in %lu ns: "
+	"%lu ns per op\n",
+	name, result.count, result.total_time,
+	nano_per_count);
+
+	printf("Finished timing \"%s\": %lu ops in %lu ns: "
+	"%lu ns per op\n",
 	name, result.count, result.total_time,
 	nano_per_count);
 }	

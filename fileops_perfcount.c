@@ -92,6 +92,7 @@ void _perfcount_print(void) __attribute__((destructor));
 void _perfcount_print(void)
 {
 	MSG("_perfcount_: Here are the function counts:\n");
+	printf("==================== PERFCOUNT timing stats: ====================\n");
 	#define COUNT_PRINT(FUNCT) perf_print_stat(NVP_PRINT_FD, FUNCT##_stat, #FUNCT);
 	#define COUNT_PRINT_IWRAP(r, data, elem) COUNT_PRINT(elem)
 	BOOST_PP_SEQ_FOR_EACH(COUNT_PRINT_IWRAP, x, ALLOPS_WPAREN)
