@@ -2,6 +2,7 @@
 
 #include "nv_common.h"
 #include "perfcount.h"
+#include <signal.h>
 
 #define ENV_COUNT_FOP "NVP_COUNT_FOP"
 
@@ -76,12 +77,15 @@ RETT_IOCTL _perfcount_IOCTL(INTF_IOCTL)
 	return result;
 }
 
+void _perfcount_SIGUSR1_handler(int sig);
+
 void _perfcount_init2(void) __attribute__((constructor));
 void _perfcount_init2(void)
 {
 	#define COUNT_INIT(FUNCT) perf_clear_stat(FUNCT##_stat);
 	#define COUNT_INIT_IWRAP(r, data, elem) COUNT_INIT(elem)
 	BOOST_PP_SEQ_FOR_EACH(COUNT_INIT_IWRAP, x, ALLOPS_WPAREN)
+	signal(SIGUSR1, _perfcount_SIGUSR1_handler);
 }
 
 void _perfcount_print(void) __attribute__((destructor));
@@ -91,5 +95,11 @@ void _perfcount_print(void)
 	#define COUNT_PRINT(FUNCT) perf_print_stat(NVP_PRINT_FD, FUNCT##_stat, #FUNCT);
 	#define COUNT_PRINT_IWRAP(r, data, elem) COUNT_PRINT(elem)
 	BOOST_PP_SEQ_FOR_EACH(COUNT_PRINT_IWRAP, x, ALLOPS_WPAREN)
+}
+
+void _perfcount_SIGUSR1_handler(int sig)
+{
+	MSG("SIGUSR1: print stats\n");
+	_perfcount_print();
 }
 
