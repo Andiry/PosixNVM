@@ -93,7 +93,11 @@ RETT_IOCTL _perfcount_IOCTL(INTF_IOCTL)
 RETT_READ _perfcount_READ(INTF_READ)
 {
 	RETT_READ ret;
+	timing_type start_time;
+
+	perf_start_timing(READ_stat, start_time);
 	ret = _perfcount_fileops->READ(CALL_READ);
+	perf_end_timing(READ_stat, start_time);
 
 	num_read++;
 	size_read += ret;
@@ -103,7 +107,11 @@ RETT_READ _perfcount_READ(INTF_READ)
 RETT_WRITE _perfcount_WRITE(INTF_WRITE)
 {
 	RETT_WRITE ret;
+	timing_type start_time;
+
+	perf_start_timing(WRITE_stat, start_time);
 	ret = _perfcount_fileops->WRITE(CALL_WRITE);
+	perf_end_timing(WRITE_stat, start_time);
 
 	num_write++;
 	size_write += ret;
@@ -113,7 +121,11 @@ RETT_WRITE _perfcount_WRITE(INTF_WRITE)
 RETT_PREAD _perfcount_PREAD(INTF_PREAD)
 {
 	RETT_PREAD ret;
+	timing_type start_time;
+
+	perf_start_timing(PREAD_stat, start_time);
 	ret = _perfcount_fileops->PREAD(CALL_PREAD);
+	perf_end_timing(PREAD_stat, start_time);
 
 	num_pread++;
 	size_pread += ret;
@@ -123,7 +135,11 @@ RETT_PREAD _perfcount_PREAD(INTF_PREAD)
 RETT_PWRITE _perfcount_PWRITE(INTF_PWRITE)
 {
 	RETT_PWRITE ret;
+	timing_type start_time;
+
+	perf_start_timing(PWRITE_stat, start_time);
 	ret = _perfcount_fileops->PWRITE(CALL_PWRITE);
+	perf_end_timing(PWRITE_stat, start_time);
 
 	num_pwrite++;
 	size_pwrite += ret;
