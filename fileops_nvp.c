@@ -296,6 +296,22 @@ void *memcpy_fsync_flush_on_write(void *dest, const void *src, size_t n)
 	return result;
 }
 
+#define	CACHELINE_SIZE	64
+
+static inline void nvp_flush_buffer(void *buf, size_t len)
+{
+	int i;
+	len = len + ((unsigned long)(buf) & (CACHELINE_SIZE - 1));
+	for (i = 0; i < len; i += CACHELINE_SIZE)
+		asm volatile ("clflush %0\n" : "+m" (*(char *)(buf+i)));
+}
+
+
+static inline void fence(void)
+{
+	asm volatile ("sfence\n" : : );
+}
+
 
 /* ============================= Timing =============================== */
 
@@ -682,6 +698,12 @@ out:
 static unsigned long calculate_capacity(unsigned int height)
 {
 	unsigned long capacity = MAX_MMAP_SIZE;
+
+	if (height >= 10) {
+		// Impossible!
+		ERROR("%s: ERROR!\n");
+		assert(0);
+	}
 
 	while (height) {
 		capacity *= 1024;
@@ -2376,14 +2398,88 @@ RETT_UNLINKAT _nvp_UNLINKAT(INTF_UNLINKAT)
 	return result;
 }
 
+int nvp_user_sync(struct NVFile *nvf)
+{
+	off_t offset = nvf->node->last_write_offset;
+	size_t size = nvf->node->last_write_length;
+	size_t extent_length;
+	unsigned long mmap_addr;
+	int index;
+	unsigned int height;
+	unsigned long capacity;
+	unsigned long *root;
+	unsigned long start_addr;
+	off_t start_offset = offset;
+	int cpuid = GET_CPUID();
+
+	NVP_LOCK_NODE_RD(nvf, cpuid);
+	while (size > 0) {
+		start_offset = offset;
+		height = nvf->node->height;
+		capacity = MAX_MMAP_SIZE;
+		root = nvf->node->root;
+
+		do {
+			capacity = calculate_capacity(height);
+			index = start_offset / capacity;
+			DEBUG("index %d, height %d\n", index, height);
+			if (index >= 1024 || root[index] == 0) {
+				// Not found. Already synced in kernel
+				goto out;
+			}
+			if (height) {
+				root = (unsigned long *)root[index];
+				DEBUG("%p\n", root);
+			} else {
+				start_addr = root[index];
+				DEBUG("addr 0x%lx\n", start_addr);
+			}
+			start_offset = start_offset % capacity;
+		} while(height--);
+
+		if (IS_ERR(start_addr) || start_addr == 0) {
+			MSG("ERROR!\n");
+			assert(0);
+		}
+
+		mmap_addr = start_addr + offset % MAX_MMAP_SIZE;
+		extent_length = MAX_MMAP_SIZE - (offset % MAX_MMAP_SIZE);
+
+		DEBUG("offset 0x%lx ,mmap addr 0x%llx, extent_length %lu, "
+				"mmap offset 0x%lx, mmap_length %lu\n", offset,
+				mmap_addr, extent_length);
+		if (extent_length > size)
+			extent_length = size;
+
+		nvp_flush_buffer((void *)mmap_addr, extent_length);
+
+		offset += extent_length;
+		if (size > extent_length)
+			size -= extent_length;
+		else
+			size = 0;
+	}
+out:
+	NVP_UNLOCK_NODE_RD(nvf, cpuid);
+
+	fence();
+
+	DEBUG("NVP user sync: fd %d, cache inode %d\n",
+			nvf->fd, nvf->cache_serialno);
+
+	return 0;
+}
+
 RETT_FSYNC _nvp_FSYNC(INTF_FSYNC)
 {
 	CHECK_RESOLVE_FILEOPS(_nvp_);
 	RETT_FSYNC result;
+	struct NVFile* nvf = &_nvp_fd_lookup[file];
 	timing_type fsync_time;
 
 	NVP_START_TIMING(fsync_t, fsync_time);
-	result = _nvp_fileops->FSYNC(CALL_FSYNC);
+//	result = _nvp_fileops->FSYNC(CALL_FSYNC);
+	result = nvp_user_sync(nvf);
 	NVP_END_TIMING(fsync_t, fsync_time);
 
 	return result;
@@ -2395,9 +2491,10 @@ RETT_FDSYNC _nvp_FDSYNC(INTF_FDSYNC)
 	struct NVFile* nvf = &_nvp_fd_lookup[file];
 	RETT_FDSYNC result;
 	timing_type fdsync_time;
-	struct sync_range packet;
+//	struct sync_range packet;
 
 	NVP_START_TIMING(fdsync_t, fdsync_time);
+#if 0
 	if (nvf->pmfs_sync) {
 		packet.offset = nvf->node->last_write_offset;
 		packet.length = nvf->node->last_write_length;
@@ -2407,6 +2504,8 @@ RETT_FDSYNC _nvp_FDSYNC(INTF_FDSYNC)
 	} else {
 		result = _nvp_fileops->FDSYNC(CALL_FDSYNC);
 	}
+#endif
+	result = nvp_user_sync(nvf);
 	NVP_END_TIMING(fdsync_t, fdsync_time);
 
 	return result;
