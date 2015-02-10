@@ -373,6 +373,22 @@ void *memcpy_fsync_flush_on_write(void *dest, const void *src, size_t n)
 	return result;
 }
 
+#define	CACHELINE_SIZE	64
+
+static inline void bankshot2_flush_buffer(void *buf, size_t len)
+{
+	int i;
+	len = len + ((unsigned long)(buf) & (CACHELINE_SIZE - 1));
+	for (i = 0; i < len; i += CACHELINE_SIZE)
+		asm volatile ("clflush %0\n" : "+m" (*(char *)(buf+i)));
+}
+
+
+static inline void fence(void)
+{
+	asm volatile ("sfence\n" : : );
+}
+
 //////////////////////////
 
 #define TIME_READ_MEMCPY 0
@@ -1703,6 +1719,7 @@ int bankshot2_get_extent(struct NVFile *nvf,
 	int ret, feret;
 	void *carrier;
 	off_t cached_extent_offset;
+
 	off_t offset = extent_info->offset;
 	size_t cached_extent_length;
 	struct bankshot2_cache_data data;
@@ -3031,9 +3048,17 @@ RETT_FDSYNC _bankshot2_FDSYNC(INTF_FDSYNC)
 
 #elif ENABLE_FSYNC_TO_CACHE
 
-int bankshot2_sync(struct NVFile *nvf, struct bankshot2_cache_data *data)
+int bankshot2_sync(struct NVFile *nvf, int datasync)
 {
 	int result;
+	struct bankshot2_cache_data data;
+
+	memset(&data, 0, sizeof(struct bankshot2_cache_data));
+	data.file = nvf->fd;
+	data.cache_ino = nvf->cache_serialno;
+	data.offset = nvf->node->last_write_offset;
+	data.size = nvf->node->last_write_length;
+	data.datasync = datasync;
 
 	DEBUG("bankshot2 sync: fd %d, cache inode %d\n",
 			data->file, data->cache_ino);
@@ -3048,23 +3073,70 @@ int bankshot2_sync(struct NVFile *nvf, struct bankshot2_cache_data *data)
 	return result;
 }
 
+int bankshot2_user_sync(struct NVFile *nvf)
+{
+	int result;
+	off_t offset = nvf->node->last_write_offset;
+	size_t size = nvf->node->last_write_length;
+	off_t cached_extent_offset;
+	size_t cached_extent_length;
+	unsigned long cached_extent_start;
+	size_t extent_length;
+	unsigned long mmap_addr;
+	int cpuid = GET_CPUID();
+
+	NVP_LOCK_NODE_RD(nvf, cpuid);
+	while (size > 0) {
+		cached_extent_offset = offset;
+
+#if USE_BTREE
+		result = find_extent_btree(nvf, &cached_extent_offset,
+				&cached_extent_length, &cached_extent_start);
+#else
+		result = find_extent(nvf, &cached_extent_offset,
+				&cached_extent_length, &cached_extent_start);
+#endif
+
+		if (result != 1) /* Not mmaped. Already sync in kernel. */
+			break;
+
+		mmap_addr = cached_extent_start +
+				(offset - cached_extent_offset);
+		extent_length = cached_extent_length -
+				(offset - cached_extent_offset);
+		DEBUG("offset 0x%lx ,mmap addr 0x%llx, extent_length %lu, "
+				"mmap offset 0x%lx, mmap_length %lu\n", offset,
+				mmap_addr, extent_length);
+		if (extent_length >= size)
+			extent_length = size;
+
+		bankshot2_flush_buffer((void *)mmap_addr, extent_length);
+
+		offset += extent_length;
+		if (size >= extent_length)
+			size -= extent_length;
+		else
+			size = 0;
+	}
+	NVP_UNLOCK_NODE_RD(nvf, cpuid);
+
+	fence();
+
+	DEBUG("bankshot2 user sync: fd %d, cache inode %d\n",
+			nvf->fd, nvf->cache_serialno);
+
+	return 0;
+}
+
 RETT_FSYNC _bankshot2_FSYNC(INTF_FSYNC)
 {
 	CHECK_RESOLVE_FILEOPS(_bankshot2_);
 	RETT_FSYNC result;
 	timing_type fsync_time;
 	struct NVFile* nvf = &_bankshot2_fd_lookup[file];
-	struct bankshot2_cache_data data;
-
-	memset(&data, 0, sizeof(struct bankshot2_cache_data));
-	data.file = nvf->fd;
-	data.cache_ino = nvf->cache_serialno;
-	data.offset = nvf->node->last_write_offset;
-	data.size = nvf->node->last_write_length;
-	data.datasync = 0;
 
 	BANKSHOT2_START_TIMING(fsync_t, fsync_time);
-	result = bankshot2_sync(nvf, &data);
+	result = bankshot2_user_sync(nvf);
 	BANKSHOT2_END_TIMING(fsync_t, fsync_time);
 
 	return result;
@@ -3076,17 +3148,9 @@ RETT_FDSYNC _bankshot2_FDSYNC(INTF_FDSYNC)
 	RETT_FDSYNC result;
 	timing_type fdsync_time;
 	struct NVFile* nvf = &_bankshot2_fd_lookup[file];
-	struct bankshot2_cache_data data;
-
-	memset(&data, 0, sizeof(struct bankshot2_cache_data));
-	data.file = nvf->fd;
-	data.cache_ino = nvf->cache_serialno;
-	data.offset = nvf->node->last_write_offset;
-	data.size = nvf->node->last_write_length;
-	data.datasync = 1;
 
 	BANKSHOT2_START_TIMING(fdsync_t, fdsync_time);
-	result = bankshot2_sync(nvf, &data);
+	result = bankshot2_user_sync(nvf);
 	BANKSHOT2_END_TIMING(fdsync_t, fdsync_time);
 
 	return result;
